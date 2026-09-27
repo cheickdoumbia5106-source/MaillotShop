@@ -8,6 +8,9 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Mail\SendCommandMail;
+use App\Models\User;
+use Illuminate\Support\Facades\Mail;
 
 class OrderController extends Controller
 {
@@ -48,33 +51,52 @@ class OrderController extends Controller
             $total += $item['price'] * $item['quantity'];
         }
 
-        DB::transaction(function () use ($request, $cart, $total) {
-            $order = Order::create([
-                'user_id' => Auth::id(),
-                'total' => $total,
-                'status' => 'en_attente',
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'phone' => $request->phone,
-                'address' => $request->address,
-                'city' => $request->city,
+        $order = DB::transaction(function () use ($request, $cart, $total) {
+
+        $order = Order::create([
+            'user_id' => Auth::id(),
+            'total' => $total,
+            'status' => 'en_attente',
+            'first_name' => $request->first_name,
+            'last_name' => $request->last_name,
+            'phone' => $request->phone,
+            'address' => $request->address,
+            'city' => $request->city,
+        ]);
+
+        foreach ($cart as $productId => $item) {
+
+            OrderItem::create([
+                'order_id' => $order->id,
+                'product_id' => $productId,
+                'quantity' => $item['quantity'],
+                'price' => $item['price'],
             ]);
 
-            foreach ($cart as $productId => $item) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $productId,
-                    'quantity' => $item['quantity'],
-                    'price' => $item['price'],
-                ]);
+            Product::where('id', $productId)
+                ->decrement('stock', $item['quantity']);
+        }
 
-                Product::where('id', $productId)->decrement('stock', $item['quantity']);
-            }
-        });
+        return $order;
+    });
 
-        session()->forget('cart');
+    $order->load('orderItems.product');
 
-        return redirect()->route('orders.index')->with('success', 'Votre commande a été passée avec succès !');
+    // Envoyer un email à tous les administrateurs
+    $admins = User::where('role', 'admin')
+        ->whereNotNull('email')
+        ->get();
+
+    foreach ($admins as $admin) {
+        Mail::to($admin->email)
+            ->send(new SendCommandMail($order));
+    }
+
+    session()->forget('cart');
+
+    return redirect()
+        ->route('orders.index')
+        ->with('success', 'Votre commande a été passée avec succès !');
     }
 
     public function index()
