@@ -2,8 +2,8 @@
 
 namespace App\Mail;
 
+use App\Models\Order;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
@@ -14,39 +14,27 @@ class SendCommandMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    /**
-     * Create a new message instance.
-     */
-    public function __construct()
+    public Order $order;
+
+    public function __construct(Order $order)
     {
-        //
+        $this->order = $order;
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Send Command Mail',
+            subject: 'Nouvelle commande #' . $this->order->id,
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
         return new Content(
-            view: 'view.name',
+            view: 'mails.command-mail',
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, Attachment>
-     */
     public function attachments(): array
     {
         return [];
